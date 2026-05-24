@@ -78,14 +78,14 @@ body {
 }
 .country-btn:hover:not(.active) { background: var(--off); }
 
-/* Zone du bouton d'importation de fichiers */
-.import-bar {
+/* Zone d'actions (Import & Export) */
+.sidebar-actions {
     border-bottom: var(--border);
     background: var(--off);
     display: flex;
     flex-shrink: 0;
 }
-.import-btn {
+.action-btn {
     flex: 1;
     text-align: center;
     padding: 10px;
@@ -94,11 +94,19 @@ body {
     text-transform: uppercase;
     letter-spacing: .06em;
     cursor: pointer;
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
     color: var(--black);
+    font-family: 'DM Sans', sans-serif;
     transition: background .15s, color .15s;
 }
-.import-btn:hover {
+.action-btn:not(:last-child) {
+    border-right: var(--border);
+}
+.action-btn:hover {
     background: var(--black);
     color: var(--white);
 }
@@ -134,7 +142,7 @@ body {
 .logo-item {
     border: var(--border);
     width: 100%;
-    height: 87px; /* FIX PC : Hauteur fixe pour éviter le bug de l'aspect-ratio */
+    height: 87px; 
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -375,6 +383,16 @@ body {
 .del-btn { background: var(--white); color: var(--red); border-color: var(--red); }
 .del-btn:hover { background: var(--red); color: var(--white); }
 
+/* ══════════ MASQUAGE DES BOUTONS SUR L'EXPORTATION IMAGE ══════════ */
+.is-capturing .step-actions,
+.is-capturing ::-webkit-scrollbar {
+    display: none !important;
+}
+.is-capturing .date-input {
+    border-color: transparent !important;
+    background: transparent !important;
+}
+
 /* ══════════ MOBILE ══════════ */
 @media (max-width: 680px) {
     body { flex-direction: column-reverse; }
@@ -397,7 +415,6 @@ body {
     }
 
     .logo-item {
-        /* FIX MOBILE : On force un calcul de hauteur strict basé sur la largeur de l'écran mobile */
         height: calc(25vw - 13px); 
         margin: 1px;
     }
