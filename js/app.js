@@ -17,11 +17,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const staircaseContainer = document.getElementById('staircase-container');
     const emptyHint          = document.getElementById('empty-hint');
     const importFileInput    = document.getElementById('import-file');
+    const downloadBtn        = document.getElementById('download-btn');
 
     /* ── Init ───────────────────────────────────────── */
     renderCountries();
     renderLogos();
     renderStaircase();
+
+    /* ══════════════════════════════════════════════════
+       EXPORTATION EN IMAGE (PNG COMPLET)
+    ══════════════════════════════════════════════════ */
+    downloadBtn.addEventListener('click', () => {
+        if (!steps.length) {
+            alert("Ajoutez au moins un logo pour pouvoir exporter votre parcours !");
+            return;
+        }
+
+        // 1. On active une classe globale pour masquer temporairement les éléments d'édition/scroll
+        document.body.classList.add('is-capturing');
+
+        const target = document.getElementById('canvas-paper');
+
+        // 2. On configure html2canvas pour cibler la largeur totale de l'escalier (même cachée)
+        html2canvas(target, {
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            width: target.scrollWidth,  // Capture la largeur réelle complète
+            height: target.scrollHeight, // Capture la hauteur réelle complète
+            windowWidth: target.scrollWidth,
+            windowHeight: target.scrollHeight,
+            backgroundColor: '#FAFAF8'  // Force le fond papier blanc
+        }).then(canvas => {
+            // 3. Capture terminée, on retire la classe pour restaurer l'interface active
+            document.body.classList.remove('is-capturing');
+
+            // 4. Téléchargement automatique de l'image
+            const link = document.createElement('a');
+            link.download = `mon-parcours-politique-${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }).catch(err => {
+            document.body.classList.remove('is-capturing');
+            console.error("Erreur exportation:", err);
+            alert("Une erreur est survenue lors de la génération de l'image.");
+        });
+    });
 
     /* ══════════════════════════════════════════════════
        IMPORTATION DE FICHIERS LOCAUX
@@ -35,13 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!customLogos[currentCountry]) {
                 customLogos[currentCountry] = [];
             }
-            // Enregistre l'image locale convertie en base64
             customLogos[currentCountry].push({
                 src: event.target.result,
                 name: file.name
             });
             renderLogos();
-            importFileInput.value = ''; // Reset pour pouvoir réimporter le même fichier
+            importFileInput.value = '';
         };
         reader.readAsDataURL(file);
     });
@@ -76,12 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
         /* Bouton "?" */
         appendLogoItem(null, '?', true);
 
-        /* 1. Logos statiques du dossier assets/ */
+        /* Logos statiques du dossier assets/ */
         ASSETS_DATA[currentCountry].files.forEach(filename => {
             appendLogoItem(`assets/${currentCountry}/${filename}`, filename, false);
         });
 
-        /* 2. Logos importés localement par l'utilisateur */
+        /* Logos importés localement par l'utilisateur */
         if (customLogos[currentCountry]) {
             customLogos[currentCountry].forEach(logo => {
                 appendLogoItem(logo.src, logo.name, false);
