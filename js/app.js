@@ -107,15 +107,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function buildExportCanvas() {
-        const DPR        = 2;          // résolution ×2 pour qualité
-        const STEP_W     = 160;        // largeur d'une marche
-        const BASE_H     = 50;         // hauteur marche 1
-        const INC_H      = 40;         // incrément hauteur
-        const PAD_L      = 80;         // padding gauche
+        const DPR        = 2;
+        const STEP_W     = 160;
+        const BASE_H     = 50;
+        const INC_H      = 40;
+        const PAD_L      = 80;
         const PAD_R      = 60;
-        const PAD_T      = 220;        // espace au-dessus pour les logos
+        const PAD_T      = 220;
         const PAD_B      = 70;
-        const LOGO_SIZE  = 80;         // taille des logos
+        const LOGO_SIZE  = 80;
         const LINE_W     = 3;
         const BG         = '#FAFAF8';
         const INK        = '#0C0C0C';
@@ -187,54 +187,37 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillText(String(i + 1), stepX + STEP_W / 2, floorY - 10);
             ctx.textAlign = 'left';
 
-            // Logos — chargement parallèle (null = logo "?")
-            const imgs = await Promise.all(step.imgs.map(src => loadImg(src)));
-            // imgs garde le même index que step.imgs, y compris les null (logo ?)
-            const n = imgs.length;
-
+            // Logos — pré-rasterisés via createImageBitmap à taille fixe
+            const n = step.imgs.length;
             if (n > 0) {
                 const cols   = n <= 2 ? n : Math.min(n, 3);
-                const logoW  = Math.min(LOGO_SIZE, (STEP_W - 12) / cols);
+                const logoW  = Math.round(Math.min(LOGO_SIZE, (STEP_W - 12) / cols));
                 const logoH  = logoW;
                 const gap    = 4;
                 const totalW = cols * logoW + (cols - 1) * gap;
                 const rows   = Math.ceil(n / cols);
                 const totalH = rows * logoH + (rows - 1) * gap;
-                const startX = stepX + (STEP_W - totalW) / 2;
-                const startY = stepY - totalH - 16;
+                const startX = Math.round(stepX + (STEP_W - totalW) / 2);
+                const startY = Math.round(stepY - totalH - 16);
 
-                imgs.forEach((img, li) => {
+                // Charger chaque image comme bitmap redimensionné exact
+                const bitmaps = await Promise.all(step.imgs.map(src => loadBitmap(src, logoW, logoH)));
+
+                bitmaps.forEach((bmp, li) => {
                     const col = li % cols;
                     const row = Math.floor(li / cols);
-                    const lx  = Math.round(startX + col * (logoW + gap));
-                    const ly  = Math.round(startY + row * (logoH + gap));
-                    const lw  = Math.round(logoW);
-                    const lh  = Math.round(logoH);
+                    const lx  = startX + col * (logoW + gap);
+                    const ly  = startY + row * (logoH + gap);
 
-                    if (img) {
-                        // Canvas offscreen isolé pour éviter la contamination CORS
-                        try {
-                            const off = document.createElement('canvas');
-                            off.width  = lw * DPR;
-                            off.height = lh * DPR;
-                            const octx = off.getContext('2d');
-                            octx.scale(DPR, DPR);
-                            octx.fillStyle = '#FAFAF8';
-                            octx.fillRect(0, 0, lw, lh);
-                            octx.drawImage(img, 0, 0, lw, lh);
-                            off.toDataURL(); // lève une exception si canvas tainté (CORS)
-                            // Copie dans le canvas principal, strictement clippé
-                            ctx.save();
-                            ctx.beginPath();
-                            ctx.rect(lx, ly, lw, lh);
-                            ctx.clip();
-                            ctx.drawImage(off, lx, ly, lw, lh);
-                            ctx.restore();
-                        } catch (e) {
-                            drawQmark(ctx, lx, ly, lw, lh, '✕');
-                        }
+                    if (bmp) {
+                        // Fond blanc sous le logo (transparence PNG)
+                        ctx.fillStyle = BG;
+                        ctx.fillRect(lx, ly, logoW, logoH);
+                        // drawImage avec dimensions explicites — pas de débordement possible
+                        ctx.drawImage(bmp, 0, 0, bmp.width, bmp.height, lx, ly, logoW, logoH);
+                        bmp.close && bmp.close();
                     } else {
-                        drawQmark(ctx, lx, ly, lw, lh, '?');
+                        drawQmark(ctx, lx, ly, logoW, logoH, '?');
                     }
                 });
             }
@@ -278,14 +261,51 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.textAlign = 'left';
     }
 
-    function loadImg(src) {
-        if (!src) return Promise.resolve(null);
+    // Charge une image et la rasterise en ImageBitmap à taille exacte (w×h)
+    // Contourne les problèmes CORS/SVG : fetch en blob, puis createImageBitmap
+    async function loadBitmap(src, w, h) {
+        if (!src) return null;
+        try {
+            // Cas 1 : data URL (image importée localement) — pas de fetch nécessaire
+            if (src.startsWith('data:')) {
+                const img = await new Promise((res, rej) => {
+                    const i = new Image();
+                    i.onload  = () => res(i);
+                    i.onerror = () => rej();
+                    i.src = src;
+                });
+                return await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+            }
+            // Cas 2 : fichier local relatif (assets/) — fetch puis blob
+            const resp = await fetch(src);
+            if (!resp.ok) return null;
+            const blob = await resp.blob();
+            // Pour les SVG : convertir en PNG via un canvas intermédiaire
+            if (blob.type.includes('svg') || src.endsWith('.svg')) {
+                return await svgBlobToBitmap(blob, w, h);
+            }
+            return await createImageBitmap(blob, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Rasterise un blob SVG via un <img> + canvas offscreen
+    function svgBlobToBitmap(blob, w, h) {
         return new Promise(resolve => {
+            const url = URL.createObjectURL(blob);
             const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload  = () => resolve(img);
-            img.onerror = () => resolve(null);
-            img.src = src;
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const off = document.createElement('canvas');
+                off.width  = w * 2;
+                off.height = h * 2;
+                const octx = off.getContext('2d');
+                octx.drawImage(img, 0, 0, off.width, off.height);
+                createImageBitmap(off).then(resolve).catch(() => resolve(null));
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+            img.src = url;
         });
     }
 
