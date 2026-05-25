@@ -1,96 +1,298 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    /* ── État ───────────────────────────────────────── */
+    /* ══════════════════════════════════════
+       ÉTAT
+    ══════════════════════════════════════ */
     let currentCountry = 'FR';
-    let steps          = [];   
-    let selectedStepId = null; // mode "ajout à une marche existante"
-    
-    // Contiendra les images importées localement par l'utilisateur
-    const customLogos = {};
-    for (const key of Object.keys(ASSETS_DATA)) {
-        customLogos[key] = [];
-    }
+    let steps          = [];
+    let history        = [];   // pour undo
+    let selectedStepId = null;
+    const customLogos  = {};
+    for (const key of Object.keys(ASSETS_DATA)) customLogos[key] = [];
 
-    /* ── Éléments fixes ─────────────────────────────── */
+    /* ══════════════════════════════════════
+       ÉLÉMENTS DOM
+    ══════════════════════════════════════ */
     const countriesContainer = document.getElementById('countries-container');
     const logosContainer     = document.getElementById('logos-container');
     const staircaseContainer = document.getElementById('staircase-container');
     const emptyHint          = document.getElementById('empty-hint');
     const importFileInput    = document.getElementById('import-file');
     const downloadBtn        = document.getElementById('download-btn');
+    const undoBtn            = document.getElementById('undo-btn');
+    const clearBtn           = document.getElementById('clear-btn');
+    const mobileToggle       = document.getElementById('mobile-toggle');
+    const sidebar            = document.getElementById('sidebar');
+    const overlay            = document.getElementById('mobile-overlay');
+    const addingHint         = document.getElementById('adding-hint');
+    const logosLabel         = document.getElementById('logos-label');
+    const journeyTitle       = document.getElementById('journey-title');
 
-    /* ── Init ───────────────────────────────────────── */
+    /* ══════════════════════════════════════
+       INIT
+    ══════════════════════════════════════ */
     renderCountries();
     renderLogos();
     renderStaircase();
 
-    /* ══════════════════════════════════════════════════
-       EXPORTATION EN IMAGE (PNG COMPLET)
-    ══════════════════════════════════════════════════ */
-    downloadBtn.addEventListener('click', () => {
+    /* ══════════════════════════════════════
+       MOBILE PANEL
+    ══════════════════════════════════════ */
+    mobileToggle.addEventListener('click', openMobilePanel);
+    overlay.addEventListener('click', closeMobilePanel);
+
+    function openMobilePanel() {
+        sidebar.classList.add('mobile-open');
+        overlay.classList.remove('hidden');
+    }
+    function closeMobilePanel() {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.add('hidden');
+        selectedStepId = null;
+        addingHint.classList.add('hidden');
+        logosLabel.style.display = '';
+        renderStaircase();
+    }
+
+    /* ══════════════════════════════════════
+       UNDO / CLEAR
+    ══════════════════════════════════════ */
+    function pushHistory() {
+        history.push(JSON.stringify(steps));
+        if (history.length > 30) history.shift();
+    }
+
+    undoBtn.addEventListener('click', () => {
+        if (!history.length) return;
+        steps = JSON.parse(history.pop());
+        renderStaircase();
+    });
+
+    clearBtn.addEventListener('click', () => {
+        if (!steps.length) return;
+        if (!confirm('Effacer tout le parcours ?')) return;
+        pushHistory();
+        steps = [];
+        selectedStepId = null;
+        renderStaircase();
+    });
+
+    /* ══════════════════════════════════════
+       EXPORT CANVAS 2D (PNG haute qualité)
+    ══════════════════════════════════════ */
+    downloadBtn.addEventListener('click', exportImage);
+
+    async function exportImage() {
         if (!steps.length) {
-            alert("Ajoutez au moins un logo pour pouvoir exporter votre parcours !");
+            alert('Ajoutez au moins un logo pour exporter votre parcours !');
             return;
         }
 
-        // 1. On active une classe globale pour masquer temporairement les éléments d'édition/scroll
-        document.body.classList.add('is-capturing');
+        downloadBtn.disabled = true;
+        downloadBtn.querySelector('span').textContent = 'Génération…';
 
-        const target = document.getElementById('canvas-paper');
+        try {
+            const pngUrl = await buildExportCanvas();
+            const a = document.createElement('a');
+            a.download = `parcours-politique-${Date.now()}.png`;
+            a.href = pngUrl;
+            a.click();
+        } catch (e) {
+            console.error(e);
+            alert('Erreur lors de l\'exportation.');
+        } finally {
+            downloadBtn.disabled = false;
+            downloadBtn.querySelector('span').textContent = 'Exporter';
+        }
+    }
 
-        // 2. On configure html2canvas pour cibler la largeur totale de l'escalier (même cachée)
-        html2canvas(target, {
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            scrollX: 0,
-            scrollY: 0,
-            width: target.scrollWidth,  // Capture la largeur réelle complète
-            height: target.scrollHeight, // Capture la hauteur réelle complète
-            windowWidth: target.scrollWidth,
-            windowHeight: target.scrollHeight,
-            backgroundColor: '#FAFAF8'  // Force le fond papier blanc
-        }).then(canvas => {
-            // 3. Capture terminée, on retire la classe pour restaurer l'interface active
-            document.body.classList.remove('is-capturing');
+    async function buildExportCanvas() {
+        const DPR        = 2;          // résolution ×2 pour qualité
+        const STEP_W     = 160;        // largeur d'une marche
+        const BASE_H     = 50;         // hauteur marche 1
+        const INC_H      = 40;         // incrément hauteur
+        const PAD_L      = 80;         // padding gauche
+        const PAD_R      = 60;
+        const PAD_T      = 220;        // espace au-dessus pour les logos
+        const PAD_B      = 70;
+        const LOGO_SIZE  = 80;         // taille des logos
+        const LINE_W     = 3;
+        const BG         = '#FAFAF8';
+        const INK        = '#0C0C0C';
+        const RED        = '#D01020';
+        const MUTED      = '#aaaaaa';
 
-            // 4. Téléchargement automatique de l'image
-            const link = document.createElement('a');
-            link.download = `mon-parcours-politique-${Date.now()}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        }).catch(err => {
-            document.body.classList.remove('is-capturing');
-            console.error("Erreur exportation:", err);
-            alert("Une erreur est survenue lors de la génération de l'image.");
+        const nSteps     = steps.length;
+        const maxH       = BASE_H + (nSteps - 1) * INC_H;
+
+        // Calcul taille canvas
+        const canvasW = PAD_L + nSteps * STEP_W + PAD_R;
+        const canvasH = PAD_T + maxH + PAD_B;
+
+        const cvs = document.createElement('canvas');
+        cvs.width  = canvasW * DPR;
+        cvs.height = canvasH * DPR;
+        const ctx  = cvs.getContext('2d');
+        ctx.scale(DPR, DPR);
+
+        // Fond
+        ctx.fillStyle = BG;
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        // Titre
+        const title = journeyTitle.value.trim() || 'Mon Parcours Politique';
+        ctx.font = `700 28px 'Barlow Condensed', sans-serif`;
+        ctx.fillStyle = INK;
+        ctx.letterSpacing = '2px';
+        ctx.fillText(title.toUpperCase(), PAD_L, 46);
+        ctx.letterSpacing = '0px';
+
+        // Ligne rouge décorative sous le titre
+        ctx.fillStyle = RED;
+        ctx.fillRect(PAD_L, 54, 60, 3);
+
+        // Ligne de base (plancher)
+        const floorY = PAD_T + maxH;
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = LINE_W;
+        ctx.beginPath();
+        ctx.moveTo(PAD_L, floorY);
+        ctx.lineTo(PAD_L + nSteps * STEP_W, floorY);
+        ctx.stroke();
+
+        // Flèche sur la ligne de base
+        const arrowX = PAD_L + nSteps * STEP_W + 12;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, floorY - 6);
+        ctx.lineTo(arrowX + 14, floorY);
+        ctx.lineTo(arrowX, floorY + 6);
+        ctx.fillStyle = INK;
+        ctx.fill();
+
+        // Dessiner les marches
+        const stepPromises = steps.map(async (step, i) => {
+            const stepH = BASE_H + i * INC_H;
+            const stepX = PAD_L + i * STEP_W;
+            const stepY = floorY - stepH;
+
+            // Fond de la marche
+            ctx.strokeStyle = INK;
+            ctx.lineWidth = LINE_W;
+            ctx.strokeRect(stepX, stepY, STEP_W, stepH);
+
+            // Numéro de la marche
+            ctx.font = `600 12px 'Syne', sans-serif`;
+            ctx.fillStyle = MUTED;
+            ctx.textAlign = 'center';
+            ctx.fillText(String(i + 1), stepX + STEP_W / 2, floorY - 10);
+            ctx.textAlign = 'left';
+
+            // Logos — chargement parallèle
+            const imgs = await Promise.all(step.imgs.map(src => loadImg(src)));
+            const validImgs = imgs.filter(Boolean);
+            
+            if (validImgs.length > 0) {
+                const cols    = validImgs.length <= 2 ? validImgs.length : Math.min(validImgs.length, 3);
+                const logoW   = Math.min(LOGO_SIZE, (STEP_W - 12) / cols);
+                const logoH   = logoW;
+                const totalW  = cols * logoW + (cols - 1) * 4;
+                const rows    = Math.ceil(validImgs.length / cols);
+                const totalH  = rows * logoH + (rows - 1) * 4;
+                const startX  = stepX + (STEP_W - totalW) / 2;
+                const startY  = stepY - totalH - 16;
+
+                validImgs.forEach((img, li) => {
+                    if (!img) return;
+                    const col = li % cols;
+                    const row = Math.floor(li / cols);
+                    const lx  = startX + col * (logoW + 4);
+                    const ly  = startY + row * (logoH + 4);
+                    ctx.drawImage(img, lx, ly, logoW, logoH);
+                });
+
+                // "?" pour les logos manquants (null)
+                imgs.forEach((img, li) => {
+                    if (img) return;
+                    const col = li % cols;
+                    const row = Math.floor(li / cols);
+                    const lx  = stepX + (STEP_W - totalW) / 2 + col * (logoW + 4);
+                    const ly  = stepY - totalH - 16 + row * (logoH + 4);
+                    ctx.fillStyle = '#eee';
+                    ctx.fillRect(lx, ly, logoW, logoH);
+                    ctx.strokeStyle = '#ccc';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(lx, ly, logoW, logoH);
+                    ctx.font = `700 22px 'Barlow Condensed', sans-serif`;
+                    ctx.fillStyle = '#bbb';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('?', lx + logoW/2, ly + logoH/2 + 7);
+                    ctx.textAlign = 'left';
+                });
+            } else {
+                // Logo "?" seul
+                ctx.fillStyle = '#eee';
+                ctx.fillRect(stepX + (STEP_W - LOGO_SIZE) / 2, stepY - LOGO_SIZE - 16, LOGO_SIZE, LOGO_SIZE);
+                ctx.strokeStyle = '#ccc';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(stepX + (STEP_W - LOGO_SIZE) / 2, stepY - LOGO_SIZE - 16, LOGO_SIZE, LOGO_SIZE);
+            }
+
+            // Dates
+            if (step.dates && step.dates.trim()) {
+                ctx.font = `600 10px 'Syne', sans-serif`;
+                ctx.fillStyle = '#555';
+                ctx.textAlign = 'center';
+                const lines = step.dates.split('\n');
+                const textY = stepY + 18;
+                lines.forEach((line, li) => {
+                    ctx.fillText(line, stepX + STEP_W / 2, textY + li * 14);
+                });
+                ctx.textAlign = 'left';
+            }
         });
-    });
 
-    /* ══════════════════════════════════════════════════
-       IMPORTATION DE FICHIERS LOCAUX
-    ══════════════════════════════════════════════════ */
-    importFileInput.addEventListener('change', (e) => {
+        await Promise.all(stepPromises);
+
+        // Watermark
+        ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
+        ctx.fillStyle = '#cccccc';
+        ctx.textAlign = 'right';
+        ctx.fillText('WASLL POLITICAL JOURNEY', canvasW - 20, canvasH - 16);
+        ctx.textAlign = 'left';
+
+        return cvs.toDataURL('image/png');
+    }
+
+    function loadImg(src) {
+        if (!src) return Promise.resolve(null);
+        return new Promise(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload  = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
+    }
+
+    /* ══════════════════════════════════════
+       IMPORT FICHIER LOCAL
+    ══════════════════════════════════════ */
+    importFileInput.addEventListener('change', e => {
         const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
-        reader.onload = (event) => {
-            if (!customLogos[currentCountry]) {
-                customLogos[currentCountry] = [];
-            }
-            customLogos[currentCountry].push({
-                src: event.target.result,
-                name: file.name
-            });
+        reader.onload = ev => {
+            if (!customLogos[currentCountry]) customLogos[currentCountry] = [];
+            customLogos[currentCountry].push({ src: ev.target.result, name: file.name });
             renderLogos();
             importFileInput.value = '';
         };
         reader.readAsDataURL(file);
     });
 
-    /* ══════════════════════════════════════════════════
+    /* ══════════════════════════════════════
        PAYS
-    ══════════════════════════════════════════════════ */
+    ══════════════════════════════════════ */
     function renderCountries() {
         countriesContainer.innerHTML = '';
         for (const [code, data] of Object.entries(ASSETS_DATA)) {
@@ -100,8 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = `<span class="fi fi-${data.flag}"></span>`;
             btn.addEventListener('click', () => {
                 currentCountry = code;
-                selectedStepId = null;
-                logosContainer.classList.remove('adding-mode');
+                exitSelectMode();
                 renderCountries();
                 renderLogos();
             });
@@ -109,21 +310,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /* ══════════════════════════════════════════════════
+    /* ══════════════════════════════════════
        LOGOS SIDEBAR
-    ══════════════════════════════════════════════════ */
+    ══════════════════════════════════════ */
     function renderLogos() {
         logosContainer.innerHTML = '';
-
-        /* Bouton "?" */
         appendLogoItem(null, '?', true);
-
-        /* Logos statiques du dossier assets/ */
-        ASSETS_DATA[currentCountry].files.forEach(filename => {
-            appendLogoItem(`assets/${currentCountry}/${filename}`, filename, false);
+        ASSETS_DATA[currentCountry].files.forEach(f => {
+            appendLogoItem(`assets/${currentCountry}/${f}`, f, false);
         });
-
-        /* Logos importés localement par l'utilisateur */
         if (customLogos[currentCountry]) {
             customLogos[currentCountry].forEach(logo => {
                 appendLogoItem(logo.src, logo.name, false);
@@ -134,7 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function appendLogoItem(imgPath, label, isUnknown) {
         const div = document.createElement('div');
         div.className = 'logo-item';
-
         if (isUnknown) {
             div.innerHTML = `<span class="unknown-icon">?</span>`;
         } else {
@@ -142,82 +336,94 @@ document.addEventListener('DOMContentLoaded', () => {
             img.src = imgPath;
             img.alt = label;
             img.onerror = function () {
-                div.innerHTML = `<div class="logo-missing">
-                    <span class="miss-icon">?</span>
-                    <span>${label}</span>
-                </div>`;
+                div.innerHTML = `<div class="logo-missing"><span class="miss-icon">?</span><span>${label.replace(/\.[^.]+$/, '')}</span></div>`;
             };
             div.appendChild(img);
         }
-
-        div.addEventListener('click', () => onLogoClick(imgPath));
+        div.addEventListener('click', () => {
+            onLogoClick(imgPath);
+            // Fermer le panel mobile après sélection
+            if (window.innerWidth <= 720) closeMobilePanel();
+        });
         logosContainer.appendChild(div);
     }
 
-    /* ── Clic Logo ── */
+    /* ══════════════════════════════════════
+       CLICK LOGO → ajouter à l'escalier
+    ══════════════════════════════════════ */
     function onLogoClick(imgPath) {
+        pushHistory();
         if (selectedStepId !== null) {
             const step = steps.find(s => s.id === selectedStepId);
             if (step) {
                 step.imgs.push(imgPath);
-                selectedStepId = null;
-                logosContainer.classList.remove('adding-mode');
+                exitSelectMode();
                 renderStaircase();
                 return;
             }
         }
-        
-        const defaultDate = (typeof translations !== 'undefined' && translations['fr']) 
-            ? translations['fr']['default-date'] 
-            : "Date de début\nDate de fin";
-
-        steps.push({
-            id:    Date.now(),
-            imgs:  [imgPath],
-            dates: defaultDate
-        });
+        steps.push({ id: Date.now(), imgs: [imgPath], dates: '' });
         renderStaircase();
     }
 
-    /* ── Sélection d'une marche (ajout logo) ── */
+    function exitSelectMode() {
+        selectedStepId = null;
+        addingHint.classList.add('hidden');
+        logosLabel.style.display = '';
+    }
+
     function toggleSelectStep(id) {
         if (selectedStepId === id) {
-            selectedStepId = null;
-            logosContainer.classList.remove('adding-mode');
+            exitSelectMode();
         } else {
             selectedStepId = id;
-            logosContainer.classList.add('adding-mode');
+            addingHint.classList.remove('hidden');
+            logosLabel.style.display = 'none';
+            // Ouvrir sidebar mobile si besoin
+            if (window.innerWidth <= 720) openMobilePanel();
         }
         renderStaircase();
     }
 
-    /* ══════════════════════════════════════════════════
-       ESCALIER (DOM Flexbox)
-    ══════════════════════════════════════════════════ */
+    /* ══════════════════════════════════════
+       DÉPLACER UNE MARCHE
+    ══════════════════════════════════════ */
+    function moveStep(id, dir) {
+        const idx = steps.findIndex(s => s.id === id);
+        const newIdx = idx + dir;
+        if (newIdx < 0 || newIdx >= steps.length) return;
+        pushHistory();
+        const tmp = steps[idx];
+        steps[idx] = steps[newIdx];
+        steps[newIdx] = tmp;
+        renderStaircase();
+    }
+
+    /* ══════════════════════════════════════
+       RENDU ESCALIER
+    ══════════════════════════════════════ */
     function renderStaircase() {
+        // Sauvegarde les dates en cours d'édition
         document.querySelectorAll('.date-input').forEach((el, i) => {
             if (steps[i]) steps[i].dates = el.innerText;
         });
 
         staircaseContainer.innerHTML = '';
-        emptyHint.style.display = steps.length ? 'none' : 'block';
-
+        emptyHint.style.display = steps.length ? 'none' : 'flex';
         if (!steps.length) return;
 
-        const BASE_HEIGHT = 40; 
-        const INC_HEIGHT  = 35; 
+        const BASE_H = 48;
+        const INC_H  = 38;
 
         steps.forEach((step, i) => {
             const stepEl = document.createElement('div');
-            stepEl.className = 'step';
-            stepEl.style.height = `${BASE_HEIGHT + (i * INC_HEIGHT)}px`;
-            
-            if (step.id === selectedStepId) stepEl.classList.add('selected');
+            stepEl.className = 'step' + (step.id === selectedStepId ? ' selected' : '');
+            stepEl.style.height = `${BASE_H + i * INC_H}px`;
 
             const contentEl = document.createElement('div');
             contentEl.className = 'step-content';
 
-            /* Logos sur la marche */
+            // Logos
             const logosDiv = document.createElement('div');
             logosDiv.className = 'step-logos';
             step.imgs.forEach((src, li) => {
@@ -226,6 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : Object.assign(document.createElement('div'), { className: 'step-unknown', textContent: '?' });
                 el.addEventListener('click', e => {
                     e.stopPropagation();
+                    pushHistory();
                     step.imgs.splice(li, 1);
                     if (!step.imgs.length) steps = steps.filter(s => s.id !== step.id);
                     renderStaircase();
@@ -234,44 +441,67 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             contentEl.appendChild(logosDiv);
 
-            /* Date */
+            // Date
             const dateEl = document.createElement('div');
             dateEl.className = 'date-input';
             dateEl.contentEditable = 'true';
             dateEl.spellcheck = false;
-            dateEl.innerHTML = escHtml(step.dates);
-            dateEl.addEventListener('blur',    () => { step.dates = dateEl.innerText; });
+            dateEl.innerHTML = escHtml(step.dates || '');
+            dateEl.placeholder = 'Date…';
+            dateEl.addEventListener('blur', () => { step.dates = dateEl.innerText; });
             dateEl.addEventListener('keydown', e => {
                 if (e.key === 'Enter')  { e.preventDefault(); document.execCommand('insertLineBreak'); }
                 if (e.key === 'Escape') dateEl.blur();
             });
             contentEl.appendChild(dateEl);
 
-            /* Boutons */
+            // Actions
             const actions = document.createElement('div');
             actions.className = 'step-actions';
 
             const addBtn = document.createElement('button');
-            addBtn.className = 'add-btn';
+            addBtn.className = 'step-btn add-btn';
             addBtn.textContent = '+ Logo';
+            addBtn.title = 'Ajouter un logo à cette marche';
             addBtn.addEventListener('click', e => { e.stopPropagation(); toggleSelectStep(step.id); });
 
+            const leftBtn = document.createElement('button');
+            leftBtn.className = 'step-btn move-btn';
+            leftBtn.innerHTML = '←';
+            leftBtn.title = 'Déplacer à gauche';
+            leftBtn.disabled = i === 0;
+            leftBtn.addEventListener('click', e => { e.stopPropagation(); moveStep(step.id, -1); });
+
+            const rightBtn = document.createElement('button');
+            rightBtn.className = 'step-btn move-btn';
+            rightBtn.innerHTML = '→';
+            rightBtn.title = 'Déplacer à droite';
+            rightBtn.disabled = i === steps.length - 1;
+            rightBtn.addEventListener('click', e => { e.stopPropagation(); moveStep(step.id, 1); });
+
             const delBtn = document.createElement('button');
-            delBtn.className = 'del-btn';
-            delBtn.textContent = 'Retirer';
+            delBtn.className = 'step-btn del-btn';
+            delBtn.textContent = '✕';
+            delBtn.title = 'Retirer cette marche';
             delBtn.addEventListener('click', e => {
                 e.stopPropagation();
+                pushHistory();
                 steps = steps.filter(s => s.id !== step.id);
-                if (selectedStepId === step.id) {
-                    selectedStepId = null;
-                    logosContainer.classList.remove('adding-mode');
-                }
+                if (selectedStepId === step.id) exitSelectMode();
                 renderStaircase();
             });
 
             actions.appendChild(addBtn);
+            actions.appendChild(leftBtn);
+            actions.appendChild(rightBtn);
             actions.appendChild(delBtn);
             contentEl.appendChild(actions);
+
+            // Numéro
+            const numEl = document.createElement('div');
+            numEl.className = 'step-num';
+            numEl.textContent = i + 1;
+            stepEl.appendChild(numEl);
 
             stepEl.appendChild(contentEl);
             staircaseContainer.appendChild(stepEl);
@@ -280,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function escHtml(s) {
         return s
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-            .replace(/\n/g,'<br>');
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
     }
 });
