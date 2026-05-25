@@ -107,163 +107,171 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function buildExportCanvas() {
-        const STEP_W  = 150;
-        const BASE_H  = 50;
-        const INC_H   = 40;
-        const PAD_L   = 80;
-        const PAD_R   = 80;
-        const PAD_T   = 200;   // espace logos au-dessus
-        const PAD_B   = 70;
-        const LOGO_SZ = 76;    // taille max d'un logo (CSS strict)
-        const nSteps  = steps.length;
-        const maxH    = BASE_H + (nSteps - 1) * INC_H;
-        const W       = PAD_L + nSteps * STEP_W + PAD_R;
-        const H       = PAD_T + maxH + PAD_B;
-        const title   = journeyTitle.value.trim() || 'Mon Parcours Politique';
+        const DPR        = 2;          // résolution ×2 pour qualité
+        const STEP_W     = 160;        // largeur d'une marche
+        const BASE_H     = 50;         // hauteur marche 1
+        const INC_H      = 40;         // incrément hauteur
+        const PAD_L      = 80;         // padding gauche
+        const PAD_R      = 60;
+        const PAD_T      = 220;        // espace au-dessus pour les logos
+        const PAD_B      = 70;
+        const LOGO_SIZE  = 80;         // taille des logos
+        const LINE_W     = 3;
+        const BG         = '#FAFAF8';
+        const INK        = '#0C0C0C';
+        const RED        = '#D01020';
+        const MUTED      = '#aaaaaa';
 
-        // ── Construire le div d'export dans le DOM (hors écran) ──
-        const wrap = document.createElement('div');
-        wrap.style.cssText = [
-            'position:fixed',
-            'top:0', 'left:0',
-            'z-index:-9999',
-            'pointer-events:none',
-            `width:${W}px`,
-            `height:${H}px`,
-            'background:#FAFAF8',
-            'overflow:hidden',
-            'font-family:Barlow Condensed,sans-serif'
-        ].join(';');
+        const nSteps     = steps.length;
+        const maxH       = BASE_H + (nSteps - 1) * INC_H;
+
+        // Calcul taille canvas
+        const canvasW = PAD_L + nSteps * STEP_W + PAD_R;
+        const canvasH = PAD_T + maxH + PAD_B;
+
+        const cvs = document.createElement('canvas');
+        cvs.width  = canvasW * DPR;
+        cvs.height = canvasH * DPR;
+        const ctx  = cvs.getContext('2d');
+        ctx.scale(DPR, DPR);
+
+        // Fond
+        ctx.fillStyle = BG;
+        ctx.fillRect(0, 0, canvasW, canvasH);
 
         // Titre
-        const titleEl = document.createElement('div');
-        titleEl.textContent = title.toUpperCase();
-        titleEl.style.cssText = `position:absolute;top:24px;left:${PAD_L}px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;letter-spacing:2px;color:#0C0C0C;line-height:1`;
-        wrap.appendChild(titleEl);
+        const title = journeyTitle.value.trim() || 'Mon Parcours Politique';
+        ctx.font = `700 28px 'Barlow Condensed', sans-serif`;
+        ctx.fillStyle = INK;
+        ctx.letterSpacing = '2px';
+        ctx.fillText(title.toUpperCase(), PAD_L, 46);
+        ctx.letterSpacing = '0px';
 
-        // Trait rouge sous titre
-        const bar = document.createElement('div');
-        bar.style.cssText = `position:absolute;top:56px;left:${PAD_L}px;width:56px;height:3px;background:#D01020`;
-        wrap.appendChild(bar);
+        // Ligne rouge décorative sous le titre
+        ctx.fillStyle = RED;
+        ctx.fillRect(PAD_L, 54, 60, 3);
 
-        // Ligne plancher
+        // Ligne de base (plancher)
         const floorY = PAD_T + maxH;
-        const floor  = document.createElement('div');
-        floor.style.cssText = `position:absolute;left:${PAD_L}px;top:${floorY}px;width:${nSteps * STEP_W}px;height:3px;background:#0C0C0C`;
-        wrap.appendChild(floor);
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = LINE_W;
+        ctx.beginPath();
+        ctx.moveTo(PAD_L, floorY);
+        ctx.lineTo(PAD_L + nSteps * STEP_W, floorY);
+        ctx.stroke();
 
-        // Flèche
-        const arrow = document.createElement('div');
-        arrow.style.cssText = `position:absolute;top:${floorY - 7}px;left:${PAD_L + nSteps * STEP_W + 2}px;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:14px solid #0C0C0C`;
-        wrap.appendChild(arrow);
+        // Flèche sur la ligne de base
+        const arrowX = PAD_L + nSteps * STEP_W + 12;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, floorY - 6);
+        ctx.lineTo(arrowX + 14, floorY);
+        ctx.lineTo(arrowX, floorY + 6);
+        ctx.fillStyle = INK;
+        ctx.fill();
 
-        // Marches
-        steps.forEach((step, i) => {
+        // Dessiner les marches
+        const stepPromises = steps.map(async (step, i) => {
             const stepH = BASE_H + i * INC_H;
             const stepX = PAD_L + i * STEP_W;
             const stepY = floorY - stepH;
 
-            // Contour de la marche
-            const box = document.createElement('div');
-            box.style.cssText = `position:absolute;left:${stepX}px;top:${stepY}px;width:${STEP_W}px;height:${stepH}px;border:3px solid #0C0C0C;box-sizing:border-box;background:transparent`;
-            // Fermer côté droit seulement sur la dernière
-            if (i < nSteps - 1) box.style.borderRight = 'none';
-            wrap.appendChild(box);
+            // Fond de la marche
+            ctx.strokeStyle = INK;
+            ctx.lineWidth = LINE_W;
+            ctx.strokeRect(stepX, stepY, STEP_W, stepH);
 
-            // Numéro
-            const num = document.createElement('div');
-            num.textContent = String(i + 1);
-            num.style.cssText = `position:absolute;left:${stepX}px;top:${floorY - 20}px;width:${STEP_W}px;text-align:center;font-family:'Syne',sans-serif;font-size:11px;font-weight:600;color:#aaaaaa`;
-            wrap.appendChild(num);
+            // Numéro de la marche
+            ctx.font = `600 12px 'Syne', sans-serif`;
+            ctx.fillStyle = MUTED;
+            ctx.textAlign = 'center';
+            ctx.fillText(String(i + 1), stepX + STEP_W / 2, floorY - 10);
+            ctx.textAlign = 'left';
 
-            // Logos
-            const n    = step.imgs.length;
-            const cols = n <= 2 ? n : Math.min(n, 3);
-            const gap  = 4;
-            const lsz  = Math.round(Math.min(LOGO_SZ, (STEP_W - 16) / cols));
-            const totalW = cols * lsz + (cols - 1) * gap;
-            const rows   = Math.ceil(n / cols);
-            const totalH = rows * lsz + (rows - 1) * gap;
-            const startX = stepX + Math.round((STEP_W - totalW) / 2);
-            const startY = stepY - totalH - 14;
+            // Logos — chargement parallèle
+            const imgs = await Promise.all(step.imgs.map(src => loadImg(src)));
+            const validImgs = imgs.filter(Boolean);
+            
+            if (validImgs.length > 0) {
+                const cols    = validImgs.length <= 2 ? validImgs.length : Math.min(validImgs.length, 3);
+                const logoW   = Math.min(LOGO_SIZE, (STEP_W - 12) / cols);
+                const logoH   = logoW;
+                const totalW  = cols * logoW + (cols - 1) * 4;
+                const rows    = Math.ceil(validImgs.length / cols);
+                const totalH  = rows * logoH + (rows - 1) * 4;
+                const startX  = stepX + (STEP_W - totalW) / 2;
+                const startY  = stepY - totalH - 16;
 
-            for (let li = 0; li < step.imgs.length; li++) {
-                const src = step.imgs[li];
-                const col = li % cols;
-                const row = Math.floor(li / cols);
-                const lx  = startX + col * (lsz + gap);
-                const ly  = startY + row * (lsz + gap);
+                validImgs.forEach((img, li) => {
+                    if (!img) return;
+                    const col = li % cols;
+                    const row = Math.floor(li / cols);
+                    const lx  = startX + col * (logoW + 4);
+                    const ly  = startY + row * (logoH + 4);
+                    ctx.drawImage(img, lx, ly, logoW, logoH);
+                });
 
-                const slot = document.createElement('div');
-                slot.style.cssText = `position:absolute;left:${lx}px;top:${ly}px;width:${lsz}px;height:${lsz}px;overflow:hidden;background:#FAFAF8;display:flex;align-items:center;justify-content:center`;
-
-                if (src) {
-                    // Pré-redimensionner en canvas 500×500 avant de dessiner
-                    const offC = document.createElement('canvas');
-                    offC.width = 500; offC.height = 500;
-                    const offCtx = offC.getContext('2d');
-                    const tmpImg = new Image();
-                    tmpImg.crossOrigin = 'anonymous';
-                    await new Promise(r => { tmpImg.onload = r; tmpImg.onerror = r; tmpImg.src = src; });
-                    offCtx.drawImage(tmpImg, 0, 0, 500, 500);
-                    const img = document.createElement('img');
-                    img.src = offC.toDataURL('image/png');
-                    img.style.cssText = `display:block;width:${lsz}px;height:${lsz}px;object-fit:contain;flex-shrink:0`;
-                    slot.appendChild(img);
-                } else {
-                    slot.style.border = '1.5px solid #cccccc';
-                    slot.style.background = '#eeeeee';
-                    const q = document.createElement('span');
-                    q.textContent = '?';
-                    q.style.cssText = 'font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:28px;color:#aaaaaa';
-                    slot.appendChild(q);
-                }
-                wrap.appendChild(slot);
+                // "?" pour les logos manquants (null)
+                imgs.forEach((img, li) => {
+                    if (img) return;
+                    const col = li % cols;
+                    const row = Math.floor(li / cols);
+                    const lx  = stepX + (STEP_W - totalW) / 2 + col * (logoW + 4);
+                    const ly  = stepY - totalH - 16 + row * (logoH + 4);
+                    ctx.fillStyle = '#eee';
+                    ctx.fillRect(lx, ly, logoW, logoH);
+                    ctx.strokeStyle = '#ccc';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(lx, ly, logoW, logoH);
+                    ctx.font = `700 22px 'Barlow Condensed', sans-serif`;
+                    ctx.fillStyle = '#bbb';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('?', lx + logoW/2, ly + logoH/2 + 7);
+                    ctx.textAlign = 'left';
+                });
+            } else {
+                // Logo "?" seul
+                ctx.fillStyle = '#eee';
+                ctx.fillRect(stepX + (STEP_W - LOGO_SIZE) / 2, stepY - LOGO_SIZE - 16, LOGO_SIZE, LOGO_SIZE);
+                ctx.strokeStyle = '#ccc';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(stepX + (STEP_W - LOGO_SIZE) / 2, stepY - LOGO_SIZE - 16, LOGO_SIZE, LOGO_SIZE);
             }
 
-            // Date
+            // Dates
             if (step.dates && step.dates.trim()) {
+                ctx.font = `600 10px 'Syne', sans-serif`;
+                ctx.fillStyle = '#555';
+                ctx.textAlign = 'center';
                 const lines = step.dates.split('\n');
+                const textY = stepY + 18;
                 lines.forEach((line, li) => {
-                    const dt = document.createElement('div');
-                    dt.textContent = line;
-                    dt.style.cssText = `position:absolute;left:${stepX}px;top:${stepY + 10 + li * 14}px;width:${STEP_W}px;text-align:center;font-family:'Syne',sans-serif;font-size:10px;font-weight:600;color:#444444;letter-spacing:.01em`;
-                    wrap.appendChild(dt);
+                    ctx.fillText(line, stepX + STEP_W / 2, textY + li * 14);
                 });
+                ctx.textAlign = 'left';
             }
         });
+
+        await Promise.all(stepPromises);
 
         // Watermark
-        const wm = document.createElement('div');
-        wm.textContent = 'WASLL POLITICAL JOURNEY';
-        wm.style.cssText = `position:absolute;bottom:14px;right:18px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:#cccccc`;
-        wrap.appendChild(wm);
+        ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
+        ctx.fillStyle = '#cccccc';
+        ctx.textAlign = 'right';
+        ctx.fillText('WASLL POLITICAL JOURNEY', canvasW - 20, canvasH - 16);
+        ctx.textAlign = 'left';
 
-        document.body.appendChild(wrap);
+        return cvs.toDataURL('image/png');
+    }
 
-        // Attendre que toutes les images soient chargées
-        const imgs = Array.from(wrap.querySelectorAll('img'));
-        await Promise.all(imgs.map(img =>
-            img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
-        ));
-        // Petit délai de rendu
-        await new Promise(r => setTimeout(r, 120));
-
-        // Capturer avec html2canvas
-        const canvas = await html2canvas(wrap, {
-            useCORS: true,
-            allowTaint: false,
-            logging: false,
-            scale: 2,
-            width: W,
-            height: H,
-            windowWidth: W,
-            windowHeight: H,
-            backgroundColor: '#FAFAF8'
+    function loadImg(src) {
+        if (!src) return Promise.resolve(null);
+        return new Promise(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload  = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = src;
         });
-
-        document.body.removeChild(wrap);
-        return canvas.toDataURL('image/png');
     }
 
     /* ══════════════════════════════════════
