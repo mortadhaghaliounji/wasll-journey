@@ -187,54 +187,44 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillText(String(i + 1), stepX + STEP_W / 2, floorY - 10);
             ctx.textAlign = 'left';
 
-            // Logos — chargement parallèle
+            // Logos — chargement parallèle (null = logo "?")
             const imgs = await Promise.all(step.imgs.map(src => loadImg(src)));
-            const validImgs = imgs.filter(Boolean);
-            
-            if (validImgs.length > 0) {
-                const cols    = validImgs.length <= 2 ? validImgs.length : Math.min(validImgs.length, 3);
-                const logoW   = Math.min(LOGO_SIZE, (STEP_W - 12) / cols);
-                const logoH   = logoW;
-                const totalW  = cols * logoW + (cols - 1) * 4;
-                const rows    = Math.ceil(validImgs.length / cols);
-                const totalH  = rows * logoH + (rows - 1) * 4;
-                const startX  = stepX + (STEP_W - totalW) / 2;
-                const startY  = stepY - totalH - 16;
+            // imgs garde le même index que step.imgs, y compris les null (logo ?)
+            const n = imgs.length;
 
-                validImgs.forEach((img, li) => {
-                    if (!img) return;
-                    const col = li % cols;
-                    const row = Math.floor(li / cols);
-                    const lx  = startX + col * (logoW + 4);
-                    const ly  = startY + row * (logoH + 4);
-                    ctx.drawImage(img, lx, ly, logoW, logoH);
-                });
+            if (n > 0) {
+                const cols   = n <= 2 ? n : Math.min(n, 3);
+                const logoW  = Math.min(LOGO_SIZE, (STEP_W - 12) / cols);
+                const logoH  = logoW;
+                const gap    = 4;
+                const totalW = cols * logoW + (cols - 1) * gap;
+                const rows   = Math.ceil(n / cols);
+                const totalH = rows * logoH + (rows - 1) * gap;
+                const startX = stepX + (STEP_W - totalW) / 2;
+                const startY = stepY - totalH - 16;
 
-                // "?" pour les logos manquants (null)
                 imgs.forEach((img, li) => {
-                    if (img) return;
                     const col = li % cols;
                     const row = Math.floor(li / cols);
-                    const lx  = stepX + (STEP_W - totalW) / 2 + col * (logoW + 4);
-                    const ly  = stepY - totalH - 16 + row * (logoH + 4);
-                    ctx.fillStyle = '#eee';
-                    ctx.fillRect(lx, ly, logoW, logoH);
-                    ctx.strokeStyle = '#ccc';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(lx, ly, logoW, logoH);
-                    ctx.font = `700 22px 'Barlow Condensed', sans-serif`;
-                    ctx.fillStyle = '#bbb';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('?', lx + logoW/2, ly + logoH/2 + 7);
-                    ctx.textAlign = 'left';
+                    const lx  = startX + col * (logoW + gap);
+                    const ly  = startY + row * (logoH + gap);
+
+                    if (img) {
+                        ctx.drawImage(img, lx, ly, logoW, logoH);
+                    } else {
+                        // Case "?" grisée
+                        ctx.fillStyle = '#eeeeee';
+                        ctx.fillRect(lx, ly, logoW, logoH);
+                        ctx.strokeStyle = '#cccccc';
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeRect(lx, ly, logoW, logoH);
+                        ctx.font = `700 ${Math.round(logoW * 0.4)}px 'Barlow Condensed', sans-serif`;
+                        ctx.fillStyle = '#aaaaaa';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('?', lx + logoW / 2, ly + logoH / 2 + logoW * 0.13);
+                        ctx.textAlign = 'left';
+                    }
                 });
-            } else {
-                // Logo "?" seul
-                ctx.fillStyle = '#eee';
-                ctx.fillRect(stepX + (STEP_W - LOGO_SIZE) / 2, stepY - LOGO_SIZE - 16, LOGO_SIZE, LOGO_SIZE);
-                ctx.strokeStyle = '#ccc';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(stepX + (STEP_W - LOGO_SIZE) / 2, stepY - LOGO_SIZE - 16, LOGO_SIZE, LOGO_SIZE);
             }
 
             // Dates
@@ -257,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
         ctx.fillStyle = '#cccccc';
         ctx.textAlign = 'right';
-        ctx.fillText('WASLL POLITICAL JOURNEY', canvasW - 20, canvasH - 16);
+        ctx.fillText('journey.wasll.tn', canvasW - 20, canvasH - 16);
         ctx.textAlign = 'left';
 
         return cvs.toDataURL('image/png');
