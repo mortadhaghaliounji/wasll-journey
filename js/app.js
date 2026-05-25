@@ -206,23 +206,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 imgs.forEach((img, li) => {
                     const col = li % cols;
                     const row = Math.floor(li / cols);
-                    const lx  = startX + col * (logoW + gap);
-                    const ly  = startY + row * (logoH + gap);
+                    const lx  = Math.round(startX + col * (logoW + gap));
+                    const ly  = Math.round(startY + row * (logoH + gap));
+                    const lw  = Math.round(logoW);
+                    const lh  = Math.round(logoH);
 
                     if (img) {
-                        ctx.drawImage(img, lx, ly, logoW, logoH);
+                        // Canvas offscreen isolé pour éviter la contamination CORS
+                        try {
+                            const off = document.createElement('canvas');
+                            off.width  = lw * DPR;
+                            off.height = lh * DPR;
+                            const octx = off.getContext('2d');
+                            octx.scale(DPR, DPR);
+                            octx.fillStyle = '#FAFAF8';
+                            octx.fillRect(0, 0, lw, lh);
+                            octx.drawImage(img, 0, 0, lw, lh);
+                            off.toDataURL(); // lève une exception si canvas tainté (CORS)
+                            // Copie dans le canvas principal, strictement clippé
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.rect(lx, ly, lw, lh);
+                            ctx.clip();
+                            ctx.drawImage(off, lx, ly, lw, lh);
+                            ctx.restore();
+                        } catch (e) {
+                            drawQmark(ctx, lx, ly, lw, lh, '✕');
+                        }
                     } else {
-                        // Case "?" grisée
-                        ctx.fillStyle = '#eeeeee';
-                        ctx.fillRect(lx, ly, logoW, logoH);
-                        ctx.strokeStyle = '#cccccc';
-                        ctx.lineWidth = 1.5;
-                        ctx.strokeRect(lx, ly, logoW, logoH);
-                        ctx.font = `700 ${Math.round(logoW * 0.4)}px 'Barlow Condensed', sans-serif`;
-                        ctx.fillStyle = '#aaaaaa';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('?', lx + logoW / 2, ly + logoH / 2 + logoW * 0.13);
-                        ctx.textAlign = 'left';
+                        drawQmark(ctx, lx, ly, lw, lh, '?');
                     }
                 });
             }
@@ -251,6 +263,19 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.textAlign = 'left';
 
         return cvs.toDataURL('image/png');
+    }
+
+    function drawQmark(ctx, lx, ly, lw, lh, char) {
+        ctx.fillStyle = '#eeeeee';
+        ctx.fillRect(lx, ly, lw, lh);
+        ctx.strokeStyle = '#cccccc';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(lx, ly, lw, lh);
+        ctx.font = `700 ${Math.round(lw * 0.38)}px 'Barlow Condensed', sans-serif`;
+        ctx.fillStyle = '#aaaaaa';
+        ctx.textAlign = 'center';
+        ctx.fillText(char, lx + lw / 2, ly + lh / 2 + lw * 0.12);
+        ctx.textAlign = 'left';
     }
 
     function loadImg(src) {
