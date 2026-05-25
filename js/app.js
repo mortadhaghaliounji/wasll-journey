@@ -107,206 +107,156 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function buildExportCanvas() {
-        const DPR        = 2;
-        const STEP_W     = 160;
-        const BASE_H     = 50;
-        const INC_H      = 40;
-        const PAD_L      = 80;
-        const PAD_R      = 60;
-        const PAD_T      = 220;
-        const PAD_B      = 70;
-        const LOGO_SIZE  = 80;
-        const LINE_W     = 3;
-        const BG         = '#FAFAF8';
-        const INK        = '#0C0C0C';
-        const RED        = '#D01020';
-        const MUTED      = '#aaaaaa';
+        const STEP_W  = 150;
+        const BASE_H  = 50;
+        const INC_H   = 40;
+        const PAD_L   = 80;
+        const PAD_R   = 80;
+        const PAD_T   = 200;   // espace logos au-dessus
+        const PAD_B   = 70;
+        const LOGO_SZ = 76;    // taille max d'un logo (CSS strict)
+        const nSteps  = steps.length;
+        const maxH    = BASE_H + (nSteps - 1) * INC_H;
+        const W       = PAD_L + nSteps * STEP_W + PAD_R;
+        const H       = PAD_T + maxH + PAD_B;
+        const title   = journeyTitle.value.trim() || 'Mon Parcours Politique';
 
-        const nSteps     = steps.length;
-        const maxH       = BASE_H + (nSteps - 1) * INC_H;
-
-        // Calcul taille canvas
-        const canvasW = PAD_L + nSteps * STEP_W + PAD_R;
-        const canvasH = PAD_T + maxH + PAD_B;
-
-        const cvs = document.createElement('canvas');
-        cvs.width  = canvasW * DPR;
-        cvs.height = canvasH * DPR;
-        const ctx  = cvs.getContext('2d');
-        ctx.scale(DPR, DPR);
-
-        // Fond
-        ctx.fillStyle = BG;
-        ctx.fillRect(0, 0, canvasW, canvasH);
+        // ── Construire le div d'export dans le DOM (hors écran) ──
+        const wrap = document.createElement('div');
+        wrap.style.cssText = [
+            'position:fixed',
+            'top:0', 'left:0',
+            'z-index:-9999',
+            'pointer-events:none',
+            `width:${W}px`,
+            `height:${H}px`,
+            'background:#FAFAF8',
+            'overflow:hidden',
+            'font-family:Barlow Condensed,sans-serif'
+        ].join(';');
 
         // Titre
-        const title = journeyTitle.value.trim() || 'Mon Parcours Politique';
-        ctx.font = `700 28px 'Barlow Condensed', sans-serif`;
-        ctx.fillStyle = INK;
-        ctx.letterSpacing = '2px';
-        ctx.fillText(title.toUpperCase(), PAD_L, 46);
-        ctx.letterSpacing = '0px';
+        const titleEl = document.createElement('div');
+        titleEl.textContent = title.toUpperCase();
+        titleEl.style.cssText = `position:absolute;top:24px;left:${PAD_L}px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;letter-spacing:2px;color:#0C0C0C;line-height:1`;
+        wrap.appendChild(titleEl);
 
-        // Ligne rouge décorative sous le titre
-        ctx.fillStyle = RED;
-        ctx.fillRect(PAD_L, 54, 60, 3);
+        // Trait rouge sous titre
+        const bar = document.createElement('div');
+        bar.style.cssText = `position:absolute;top:56px;left:${PAD_L}px;width:56px;height:3px;background:#D01020`;
+        wrap.appendChild(bar);
 
-        // Ligne de base (plancher)
+        // Ligne plancher
         const floorY = PAD_T + maxH;
-        ctx.strokeStyle = INK;
-        ctx.lineWidth = LINE_W;
-        ctx.beginPath();
-        ctx.moveTo(PAD_L, floorY);
-        ctx.lineTo(PAD_L + nSteps * STEP_W, floorY);
-        ctx.stroke();
+        const floor  = document.createElement('div');
+        floor.style.cssText = `position:absolute;left:${PAD_L}px;top:${floorY}px;width:${nSteps * STEP_W}px;height:3px;background:#0C0C0C`;
+        wrap.appendChild(floor);
 
-        // Flèche sur la ligne de base
-        const arrowX = PAD_L + nSteps * STEP_W + 12;
-        ctx.beginPath();
-        ctx.moveTo(arrowX, floorY - 6);
-        ctx.lineTo(arrowX + 14, floorY);
-        ctx.lineTo(arrowX, floorY + 6);
-        ctx.fillStyle = INK;
-        ctx.fill();
+        // Flèche
+        const arrow = document.createElement('div');
+        arrow.style.cssText = `position:absolute;top:${floorY - 7}px;left:${PAD_L + nSteps * STEP_W + 2}px;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:14px solid #0C0C0C`;
+        wrap.appendChild(arrow);
 
-        // Dessiner les marches
-        const stepPromises = steps.map(async (step, i) => {
+        // Marches
+        steps.forEach((step, i) => {
             const stepH = BASE_H + i * INC_H;
             const stepX = PAD_L + i * STEP_W;
             const stepY = floorY - stepH;
 
-            // Fond de la marche
-            ctx.strokeStyle = INK;
-            ctx.lineWidth = LINE_W;
-            ctx.strokeRect(stepX, stepY, STEP_W, stepH);
+            // Contour de la marche
+            const box = document.createElement('div');
+            box.style.cssText = `position:absolute;left:${stepX}px;top:${stepY}px;width:${STEP_W}px;height:${stepH}px;border:3px solid #0C0C0C;box-sizing:border-box;background:transparent`;
+            // Fermer côté droit seulement sur la dernière
+            if (i < nSteps - 1) box.style.borderRight = 'none';
+            wrap.appendChild(box);
 
-            // Numéro de la marche
-            ctx.font = `600 12px 'Syne', sans-serif`;
-            ctx.fillStyle = MUTED;
-            ctx.textAlign = 'center';
-            ctx.fillText(String(i + 1), stepX + STEP_W / 2, floorY - 10);
-            ctx.textAlign = 'left';
+            // Numéro
+            const num = document.createElement('div');
+            num.textContent = String(i + 1);
+            num.style.cssText = `position:absolute;left:${stepX}px;top:${floorY - 20}px;width:${STEP_W}px;text-align:center;font-family:'Syne',sans-serif;font-size:11px;font-weight:600;color:#aaaaaa`;
+            wrap.appendChild(num);
 
-            // Logos — pré-rasterisés via createImageBitmap à taille fixe
-            const n = step.imgs.length;
-            if (n > 0) {
-                const cols   = n <= 2 ? n : Math.min(n, 3);
-                const logoW  = Math.round(Math.min(LOGO_SIZE, (STEP_W - 12) / cols));
-                const logoH  = logoW;
-                const gap    = 4;
-                const totalW = cols * logoW + (cols - 1) * gap;
-                const rows   = Math.ceil(n / cols);
-                const totalH = rows * logoH + (rows - 1) * gap;
-                const startX = Math.round(stepX + (STEP_W - totalW) / 2);
-                const startY = Math.round(stepY - totalH - 16);
+            // Logos
+            const n    = step.imgs.length;
+            const cols = n <= 2 ? n : Math.min(n, 3);
+            const gap  = 4;
+            const lsz  = Math.round(Math.min(LOGO_SZ, (STEP_W - 16) / cols));
+            const totalW = cols * lsz + (cols - 1) * gap;
+            const rows   = Math.ceil(n / cols);
+            const totalH = rows * lsz + (rows - 1) * gap;
+            const startX = stepX + Math.round((STEP_W - totalW) / 2);
+            const startY = stepY - totalH - 14;
 
-                // Charger chaque image comme bitmap redimensionné exact
-                const bitmaps = await Promise.all(step.imgs.map(src => loadBitmap(src, logoW, logoH)));
+            step.imgs.forEach((src, li) => {
+                const col = li % cols;
+                const row = Math.floor(li / cols);
+                const lx  = startX + col * (lsz + gap);
+                const ly  = startY + row * (lsz + gap);
 
-                bitmaps.forEach((bmp, li) => {
-                    const col = li % cols;
-                    const row = Math.floor(li / cols);
-                    const lx  = startX + col * (logoW + gap);
-                    const ly  = startY + row * (logoH + gap);
+                const slot = document.createElement('div');
+                slot.style.cssText = `position:absolute;left:${lx}px;top:${ly}px;width:${lsz}px;height:${lsz}px;overflow:hidden;background:#FAFAF8;display:flex;align-items:center;justify-content:center`;
 
-                    if (bmp) {
-                        // Fond blanc sous le logo (transparence PNG)
-                        ctx.fillStyle = BG;
-                        ctx.fillRect(lx, ly, logoW, logoH);
-                        // drawImage avec dimensions explicites — pas de débordement possible
-                        ctx.drawImage(bmp, 0, 0, bmp.width, bmp.height, lx, ly, logoW, logoH);
-                        bmp.close && bmp.close();
-                    } else {
-                        drawQmark(ctx, lx, ly, logoW, logoH, '?');
-                    }
-                });
-            }
+                if (src) {
+                    const img = document.createElement('img');
+                    img.src = src;
+                    // CSS strict — aucun débordement possible
+                    img.style.cssText = `display:block;width:${lsz}px;height:${lsz}px;max-width:${lsz}px;max-height:${lsz}px;object-fit:contain;flex-shrink:0`;
+                    img.crossOrigin = 'anonymous';
+                    slot.appendChild(img);
+                } else {
+                    slot.style.border = '1.5px solid #cccccc';
+                    slot.style.background = '#eeeeee';
+                    const q = document.createElement('span');
+                    q.textContent = '?';
+                    q.style.cssText = 'font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:28px;color:#aaaaaa';
+                    slot.appendChild(q);
+                }
+                wrap.appendChild(slot);
+            });
 
-            // Dates
+            // Date
             if (step.dates && step.dates.trim()) {
-                ctx.font = `600 10px 'Syne', sans-serif`;
-                ctx.fillStyle = '#555';
-                ctx.textAlign = 'center';
                 const lines = step.dates.split('\n');
-                const textY = stepY + 18;
                 lines.forEach((line, li) => {
-                    ctx.fillText(line, stepX + STEP_W / 2, textY + li * 14);
+                    const dt = document.createElement('div');
+                    dt.textContent = line;
+                    dt.style.cssText = `position:absolute;left:${stepX}px;top:${stepY + 10 + li * 14}px;width:${STEP_W}px;text-align:center;font-family:'Syne',sans-serif;font-size:10px;font-weight:600;color:#444444;letter-spacing:.01em`;
+                    wrap.appendChild(dt);
                 });
-                ctx.textAlign = 'left';
             }
         });
-
-        await Promise.all(stepPromises);
 
         // Watermark
-        ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
-        ctx.fillStyle = '#cccccc';
-        ctx.textAlign = 'right';
-        ctx.fillText('journey.wasll.tn', canvasW - 20, canvasH - 16);
-        ctx.textAlign = 'left';
+        const wm = document.createElement('div');
+        wm.textContent = 'WASLL POLITICAL JOURNEY';
+        wm.style.cssText = `position:absolute;bottom:14px;right:18px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:#cccccc`;
+        wrap.appendChild(wm);
 
-        return cvs.toDataURL('image/png');
-    }
+        document.body.appendChild(wrap);
 
-    function drawQmark(ctx, lx, ly, lw, lh, char) {
-        ctx.fillStyle = '#eeeeee';
-        ctx.fillRect(lx, ly, lw, lh);
-        ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(lx, ly, lw, lh);
-        ctx.font = `700 ${Math.round(lw * 0.38)}px 'Barlow Condensed', sans-serif`;
-        ctx.fillStyle = '#aaaaaa';
-        ctx.textAlign = 'center';
-        ctx.fillText(char, lx + lw / 2, ly + lh / 2 + lw * 0.12);
-        ctx.textAlign = 'left';
-    }
+        // Attendre que toutes les images soient chargées
+        const imgs = Array.from(wrap.querySelectorAll('img'));
+        await Promise.all(imgs.map(img =>
+            img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+        ));
+        // Petit délai de rendu
+        await new Promise(r => setTimeout(r, 120));
 
-    // Charge une image et la rasterise en ImageBitmap à taille exacte (w×h)
-    // Contourne les problèmes CORS/SVG : fetch en blob, puis createImageBitmap
-    async function loadBitmap(src, w, h) {
-        if (!src) return null;
-        try {
-            // Cas 1 : data URL (image importée localement) — pas de fetch nécessaire
-            if (src.startsWith('data:')) {
-                const img = await new Promise((res, rej) => {
-                    const i = new Image();
-                    i.onload  = () => res(i);
-                    i.onerror = () => rej();
-                    i.src = src;
-                });
-                return await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
-            }
-            // Cas 2 : fichier local relatif (assets/) — fetch puis blob
-            const resp = await fetch(src);
-            if (!resp.ok) return null;
-            const blob = await resp.blob();
-            // Pour les SVG : convertir en PNG via un canvas intermédiaire
-            if (blob.type.includes('svg') || src.endsWith('.svg')) {
-                return await svgBlobToBitmap(blob, w, h);
-            }
-            return await createImageBitmap(blob, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
-        } catch (e) {
-            return null;
-        }
-    }
-
-    // Rasterise un blob SVG via un <img> + canvas offscreen
-    function svgBlobToBitmap(blob, w, h) {
-        return new Promise(resolve => {
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-                const off = document.createElement('canvas');
-                off.width  = w * 2;
-                off.height = h * 2;
-                const octx = off.getContext('2d');
-                octx.drawImage(img, 0, 0, off.width, off.height);
-                createImageBitmap(off).then(resolve).catch(() => resolve(null));
-            };
-            img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-            img.src = url;
+        // Capturer avec html2canvas
+        const canvas = await html2canvas(wrap, {
+            useCORS: true,
+            allowTaint: false,
+            logging: false,
+            scale: 2,
+            width: W,
+            height: H,
+            windowWidth: W,
+            windowHeight: H,
+            backgroundColor: '#FAFAF8'
         });
+
+        document.body.removeChild(wrap);
+        return canvas.toDataURL('image/png');
     }
 
     /* ══════════════════════════════════════
