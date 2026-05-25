@@ -187,7 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const startX = stepX + Math.round((STEP_W - totalW) / 2);
             const startY = stepY - totalH - 14;
 
-            step.imgs.forEach((src, li) => {
+            for (let li = 0; li < step.imgs.length; li++) {
+                const src = step.imgs[li];
                 const col = li % cols;
                 const row = Math.floor(li / cols);
                 const lx  = startX + col * (lsz + gap);
@@ -197,11 +198,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 slot.style.cssText = `position:absolute;left:${lx}px;top:${ly}px;width:${lsz}px;height:${lsz}px;overflow:hidden;background:#FAFAF8;display:flex;align-items:center;justify-content:center`;
 
                 if (src) {
+                    // Pré-redimensionner en canvas 500×500 avant de dessiner
+                    const offC = document.createElement('canvas');
+                    offC.width = 500; offC.height = 500;
+                    const offCtx = offC.getContext('2d');
+                    const tmpImg = new Image();
+                    tmpImg.crossOrigin = 'anonymous';
+                    await new Promise(r => { tmpImg.onload = r; tmpImg.onerror = r; tmpImg.src = src; });
+                    offCtx.drawImage(tmpImg, 0, 0, 500, 500);
                     const img = document.createElement('img');
-                    img.src = src;
-                    // CSS strict — aucun débordement possible
-                    img.style.cssText = `display:block;width:${lsz}px;height:${lsz}px;max-width:${lsz}px;max-height:${lsz}px;object-fit:contain;flex-shrink:0`;
-                    img.crossOrigin = 'anonymous';
+                    img.src = offC.toDataURL('image/png');
+                    img.style.cssText = `display:block;width:${lsz}px;height:${lsz}px;object-fit:contain;flex-shrink:0`;
                     slot.appendChild(img);
                 } else {
                     slot.style.border = '1.5px solid #cccccc';
@@ -212,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     slot.appendChild(q);
                 }
                 wrap.appendChild(slot);
-            });
+            }
 
             // Date
             if (step.dates && step.dates.trim()) {
