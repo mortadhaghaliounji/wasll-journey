@@ -2,41 +2,82 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Wasll Political Journey</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.0.0/css/flag-icons.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
+    <!-- ── SIDEBAR ── -->
     <aside id="sidebar">
-        <div class="top-bar">
-            <h1 class="logo-title">Wasll <span>Journey</span></h1>
-        </div>
-        <div id="countries-container"></div>
-        
-        <!-- Barre d'actions combinant l'import et l'exportation -->
-        <div class="sidebar-actions">
-            <label for="import-file" class="action-btn import-btn">📁 Importer</label>
-            <input type="file" id="import-file" accept="image/*" style="display: none;">
-            <button id="download-btn" class="action-btn download-btn">💾 Exporter</button>
+        <div class="sidebar-header">
+            <div class="brand">
+                <span class="brand-main">WASLL</span>
+                <span class="brand-sub">Journey</span>
+            </div>
+            <div class="sidebar-actions">
+                <label for="import-file" class="action-btn" title="Importer une image">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Importer</span>
+                </label>
+                <input type="file" id="import-file" accept="image/*" style="display:none">
+                <button id="download-btn" class="action-btn" title="Exporter en PNG">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Exporter</span>
+                </button>
+            </div>
         </div>
 
+        <div id="countries-container"></div>
+
+        <div class="logos-header">
+            <span id="adding-hint" class="adding-hint hidden">← Choisissez un logo</span>
+            <span id="logos-label">Partis &amp; Organisations</span>
+        </div>
         <div id="logos-container"></div>
     </aside>
 
+    <!-- ── WORKSPACE ── -->
     <main id="workspace">
+        <!-- Toolbar top -->
+        <div id="canvas-toolbar">
+            <div class="toolbar-left">
+                <input type="text" id="journey-title" value="Mon Parcours Politique" placeholder="Titre du parcours…" spellcheck="false">
+            </div>
+            <div class="toolbar-right">
+                <button id="undo-btn" class="toolbar-btn" title="Annuler">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                </button>
+                <button id="clear-btn" class="toolbar-btn danger" title="Effacer tout">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                </button>
+                <button id="mobile-toggle" class="toolbar-btn" title="Afficher les logos">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Canvas -->
         <div id="canvas-paper">
             <div id="staircase-container" class="staircase-wrapper"></div>
-            <div id="empty-hint">CLIQUEZ SUR UN LOGO<br>POUR COMMENCER</div>
-            <div id="watermark">Mon Parcours Politique</div>
+            <div id="empty-hint">
+                <div class="hint-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                </div>
+                <p>Cliquez sur un logo<br>pour commencer votre parcours</p>
+            </div>
+            <div id="watermark">Wasll</div>
         </div>
     </main>
 
-    <!-- Importation de html2canvas depuis un CDN fiable -->
+    <!-- Mobile panel overlay -->
+    <div id="mobile-overlay" class="hidden"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/data.js"></script>
-    <script src="js/i18n.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
