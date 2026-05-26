@@ -16,7 +16,7 @@
 
 You click on a logo, it lands on a step. Steps get taller left to right. You add dates, reorder steps, stack multiple logos on one step for coalitions or overlapping memberships, and export a PNG when you're done.
 
-No account. No server. It runs entirely in the browser at [journey.wasll.tn](https://journey.wasll.tn).
+It runs entirely in the browser at [journey.wasll.tn](https://journey.wasll.tn).
 
 ## Features
 
